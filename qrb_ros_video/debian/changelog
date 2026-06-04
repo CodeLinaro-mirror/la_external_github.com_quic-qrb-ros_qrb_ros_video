@@ -1,3 +1,15 @@
+ros-jazzy-qrb-ros-video (0.2.0) noble; urgency=medium
+
+  * Update Debian dependencies after upstream library rename:
+    libqrb-video-v4l2-dev -> libqrb-video-codec-dev (Build-Depends)
+    libqrb-video-v4l2-1   -> libqrb-video-codec-1   (Depends)
+  * The underlying ROS package qrb_video_v4l2_lib was renamed to
+    qrb_video_lib to reflect that the library now supports two
+    interchangeable codec backends (V4L2 and VIDC).
+  * No functional changes to the qrb_ros_video nodes themselves.
+
+ -- Jean Xiao <jianxiao@qti.qualcomm.com>  Thu, 04 Jun 2026 12:00:00 +0000
+
 ros-jazzy-qrb-ros-video (0.1.7) noble; urgency=medium
 
   * Update usage and installation instructions in README.md

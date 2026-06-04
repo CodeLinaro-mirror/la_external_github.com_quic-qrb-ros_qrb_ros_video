@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(qrb_video_v4l2_lib VERSION 0.1.7)
+project(qrb_video_lib VERSION 0.2.0)
 
 set(CMAKE_CXX_STANDARD 17)
 include(GNUInstallDirs)
@@ -37,17 +37,17 @@ if(ENABLE_VIDC_BACKEND)
   list(APPEND SOURCES ${VIDC_SOURCES})
 endif()
 
-add_library(v4l2codecs SHARED ${SOURCES})
-set_target_properties(v4l2codecs PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 1)
-target_compile_definitions(v4l2codecs PRIVATE -D__USE_FILE_OFFSET64)
-target_link_libraries(v4l2codecs PRIVATE ${glog_LIBRARIES})
+add_library(qrb_video_codec SHARED ${SOURCES})
+set_target_properties(qrb_video_codec PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 1)
+target_compile_definitions(qrb_video_codec PRIVATE -D__USE_FILE_OFFSET64)
+target_link_libraries(qrb_video_codec PRIVATE ${glog_LIBRARIES})
 
 if(ENABLE_VIDC_BACKEND)
-  target_compile_definitions(v4l2codecs PRIVATE ENABLE_VIDC_BACKEND _VIDC_LRH_LINUX_)
-  target_link_libraries(v4l2codecs PRIVATE ${vidc_client_LIB})
+  target_compile_definitions(qrb_video_codec PRIVATE ENABLE_VIDC_BACKEND _VIDC_LRH_LINUX_)
+  target_link_libraries(qrb_video_codec PRIVATE ${vidc_client_LIB})
 endif()
 
-install(TARGETS v4l2codecs EXPORT ${PROJECT_NAME}Config
+install(TARGETS qrb_video_codec EXPORT ${PROJECT_NAME}Config
   DESTINATION ${CMAKE_INSTALL_LIBDIR} 
   INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/qrb_video)
 

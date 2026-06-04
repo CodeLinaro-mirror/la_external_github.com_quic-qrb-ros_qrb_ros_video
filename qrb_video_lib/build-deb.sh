@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Build script for qrb_video_v4l2_lib debian package
+# Build script for qrb_video_lib debian package
 
 set -e  # Exit on any error
 
-echo "Building qrb_video_v4l2_lib debian package..."
+echo "Building qrb_video_lib debian package..."
 
 # Clean previous builds
 echo "Cleaning previous builds..."
-rm -rf debian/tmp debian/.debhelper debian/libqrb-video-v4l2-*log
-rm -rf debian/debhelper-build-stamp debian/debhelper-build-stamp debian/libqrb-video-v4l2-*substvars
+rm -rf debian/tmp debian/.debhelper debian/libqrb-video-codec*log
+rm -rf debian/debhelper-build-stamp debian/debhelper-build-stamp debian/libqrb-video-codec*substvars
 
 # Build the package
 echo "Building package..."

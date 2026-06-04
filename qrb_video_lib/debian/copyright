@@ -1,5 +1,5 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: qrb-video-v4l2-lib
+Upstream-Name: qrb-video-lib
 Upstream-Contact: Jean Xiao <jianxiao@qti.qualcomm.com>
 Source: https://github.com/qualcomm-qrb-ros/qrb-ros-video
 

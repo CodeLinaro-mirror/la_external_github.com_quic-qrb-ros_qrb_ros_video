@@ -1,0 +1,27 @@
+qrb-video-lib (0.2.0) stable; urgency=medium
+
+  * Rename source package from qrb-video-v4l2-lib to qrb-video-lib to reflect
+    that the library now supports both V4L2 and VIDC backends.
+  * Rename runtime package libqrb-video-v4l2-1 -> libqrb-video-codec-1 and
+    development package libqrb-video-v4l2-dev -> libqrb-video-codec-dev.
+    SOVERSION is unchanged at 1; the shared object is now libqrb_video_codec.so.
+  * Note: this is a breaking rename. Consumers must update their package
+    dependencies and link against -lqrb_video_codec instead of -lv4l2codecs.
+
+ -- Jean Xiao <jianxiao@qti.qualcomm.com>  Thu, 04 Jun 2026 12:00:00 +0000
+
+qrb-video-v4l2-lib (0.1.2) stable; urgency=medium
+
+  * Fix: Ensure proper handling of video frame rates in MP4 container
+  * Update documentation for framerate processing
+  * Minor bug fixes and performance improvements
+
+ -- Jean Xiao <jianxiao@qti.qualcomm.com>  Tue, 29 Jul 2025 12:00:00 +0000
+
+qrb-video-v4l2-lib (0.1.0) noble; urgency=medium
+
+  * Initial release of QRB Video V4L2 Library
+  * Hardware-accelerated video encoding and decoding support
+  * V4L2 interface for Qualcomm Robotics platforms
+
+ -- Jean Xiao <jianxiao@qti.qualcomm.com>  Mon, 06 Jan 2025 12:00:00 +0000 

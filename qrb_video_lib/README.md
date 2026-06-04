@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>QRB Video V4L2 Library</h1>
+  <h1>QRB Video Codec Library</h1>
   <p align="center">
     <!-- Add images or videos to showcase your project demo, use case, or logo -->
   </p>
@@ -192,8 +192,8 @@ sudo apt install libv4l-dev
 
 ```bash
 # Install deb packages
-sudo apt install libqrb-video-v4l2-1
-sudo apt install libqrb-video-v4l2-dev
+sudo apt install libqrb-video-codec-1
+sudo apt install libqrb-video-codec-dev
 ```
 
 ## 🚀 Usage

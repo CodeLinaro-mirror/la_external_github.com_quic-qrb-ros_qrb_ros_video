@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(qrb_ros_video VERSION 0.1.7)
+project(qrb_ros_video VERSION 0.2.0)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -14,7 +14,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
-find_package(qrb_video_v4l2_lib REQUIRED)
+find_package(qrb_video_lib REQUIRED)
 
 include_directories(std_msgs_INCLUDE_DIRS)
 include_directories(sensor_msgs_INCLUDE_DIRS)
@@ -29,16 +29,16 @@ target_include_directories(ros2video_component PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(ros2video_component PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
-target_link_directories(ros2video_component PRIVATE $<TARGET_LINKER_FILE_DIR:v4l2codecs>)
+target_link_directories(ros2video_component PRIVATE $<TARGET_LINKER_FILE_DIR:qrb_video_codec>)
 set_target_properties(ros2video_component PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 1)
-target_link_libraries(ros2video_component v4l2codecs)
+target_link_libraries(ros2video_component qrb_video_codec)
 ament_target_dependencies(
   ros2video_component
   "std_msgs"
   "sensor_msgs"
   "rclcpp"
   "rclcpp_components"
-  "qrb_video_v4l2_lib"
+  "qrb_video_lib"
 )
 
 rclcpp_components_register_nodes(
@@ -76,7 +76,7 @@ ament_target_dependencies(
   "gstreamer"
 )
 target_link_libraries(test_components ${gstreamer_LIBRARIES})
-target_link_directories(test_components PRIVATE $<TARGET_LINKER_FILE_DIR:v4l2codecs>)
+target_link_directories(test_components PRIVATE $<TARGET_LINKER_FILE_DIR:qrb_video_codec>)
 set_target_properties(test_components PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 1)
 
 # Register test components
