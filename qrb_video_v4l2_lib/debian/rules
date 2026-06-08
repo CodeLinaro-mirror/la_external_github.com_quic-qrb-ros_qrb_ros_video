@@ -9,7 +9,8 @@ export CMAKE_BUILD_PARALLEL_LEVEL = $(shell nproc)
 override_dh_auto_configure:
 	dh_auto_configure -- \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DCMAKE_CXX_STANDARD=17
+		-DCMAKE_CXX_STANDARD=17 \
+		-DENABLE_VIDC_BACKEND=ON
 
 override_dh_shlibdeps:
 	dh_shlibdeps 

@@ -1,9 +1,7 @@
 /*
-**************************************************************************************************
-* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-**************************************************************************************************
-*/
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <Encoder.hpp>
 #include <array>
@@ -38,7 +36,7 @@ public:
     else
       encoder_ = Encoder::create(MIME_H264);
 
-    cb_.reset(this, [](auto * p) {});
+    cb_.reset(this, [](auto * /*p*/) {});
     encoder_->setNotifier(cb_);
     configure_encoder();
     encoder_->start();
@@ -206,7 +204,9 @@ private:
     else if (this->pixel_format == "p010")
       format = Format::P010;
 
-    Setting s = { .type = Setting::FORMAT, .data = format };
+    Setting s{};
+    s.type = Setting::FORMAT;
+    s.data = format;
     encoder_->configure(s);
   }
 
@@ -215,7 +215,9 @@ private:
     Resolution resolution = {};
     resolution.width = std::strtoul(width.c_str(), nullptr, 10);
     resolution.height = std::strtoul(height.c_str(), nullptr, 10);
-    Setting s = { .type = Resolution::type, .data = resolution };
+    Setting s{};
+    s.type = Resolution::type;
+    s.data = resolution;
     encoder_->configure(s);
   }
 
@@ -243,7 +245,9 @@ private:
         profile.value = mapping.at(this->profile);
       }
     }
-    Setting s = { .type = Setting::PROFILE, .data = profile };
+    Setting s{};
+    s.type = Setting::PROFILE;
+    s.data = profile;
     encoder_->configure(s);
   }
 
@@ -300,7 +304,9 @@ private:
         level.value = mapping.at(this->level);
       }
     }
-    Setting s = { .type = Setting::LEVEL, .data = level };
+    Setting s{};
+    s.type = Setting::LEVEL;
+    s.data = level;
     encoder_->configure(s);
   };
 
@@ -315,7 +321,9 @@ private:
       bitrate.enable = false;
     else
       bitrate.mode = Bitrate::VBR;
-    Setting s{ .type = Setting::BITRATE, .data = bitrate };
+    Setting s{};
+    s.type = Setting::BITRATE;
+    s.data = bitrate;
     encoder_->configure(s);
   }
 
@@ -323,7 +331,9 @@ private:
   {
     Framerate framerate = {};
     framerate.value = std::strtoul(this->framerate.c_str(), nullptr, 10);
-    Setting s = { .type = Setting::FRAMERATE, .data = framerate };
+    Setting s{};
+    s.type = Setting::FRAMERATE;
+    s.data = framerate;
     encoder_->configure(s);
   }
 

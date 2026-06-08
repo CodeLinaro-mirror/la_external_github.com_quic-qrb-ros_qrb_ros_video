@@ -1,9 +1,7 @@
 /*
-**************************************************************************************************
-* Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause-Clear
-**************************************************************************************************
-*/
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
 
 #include <Decoder.hpp>
 #include <qrb_ros_transport_image_type/image.hpp>
@@ -29,13 +27,15 @@ public:
       decoder_ = Decoder::create(MIME_H265);
     else
       decoder_ = Decoder::create(MIME_H264);
-    cb_.reset(this, [](auto * p) {});
+    cb_.reset(this, [](auto * /*p*/) {});
     Format f = this->pixel_format == "p010" ? Format::P010 : Format::NV12;
     decoder_->configure(Setting::create(f));
     decoder_->setNotifier(cb_);
     decoder_->start();
     RCLCPP_INFO(this->get_logger(), "VideoDecoder has been started.");
   }
+
+  ~VideoDecoder() override { decoder_->stop(); }
 
   using Type = std::conditional_t<std::is_same_v<OutputMessageT, transport::type::Image>,
       transport::type::Image,

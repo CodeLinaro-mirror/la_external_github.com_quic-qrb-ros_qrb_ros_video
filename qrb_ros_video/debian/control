@@ -24,6 +24,7 @@ Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          libqrb-video-v4l2-1,
+         video-driver,
          ros-jazzy-std-msgs,
          ros-jazzy-sensor-msgs,
          ros-jazzy-rclcpp,

@@ -5,7 +5,10 @@ Maintainer: Jean Xiao <jianxiao@qti.qualcomm.com>
 Build-Depends: debhelper-compat (= 13),
                cmake (>= 3.22),
                pkg-config,
-               libgoogle-glog-dev
+               libgoogle-glog-dev,
+               video-driver-dev,
+               mm-osal-dev,
+               common-headers-dev
 Standards-Version: 4.6.0
 Homepage: https://github.com/qualcomm-qrb-ros/qrb-ros-video
 Vcs-Git: https://github.com/qualcomm-qrb-ros/qrb-ros-video.git
