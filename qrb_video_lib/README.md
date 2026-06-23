@@ -3,9 +3,8 @@
   <p align="center">
     <!-- Add images or videos to showcase your project demo, use case, or logo -->
   </p>
-  <p>Hardware accelerated video encoding and decoding library based on Linux V4L2 API</p>
+  <p>Hardware-accelerated video encoding and decoding library for Qualcomm platforms</p>
 
-  <a href="https://ubuntu.com/download/qualcomm-iot" target="_blank"><img src="https://img.shields.io/badge/Qualcomm%20Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Qualcomm Ubuntu"></a>
   <a href="https://docs.ros.org/en/jazzy/" target="_blank"><img src="https://img.shields.io/badge/ROS%20Jazzy-1c428a?style=for-the-badge&logo=ros&logoColor=white" alt="Jazzy"></a>
 
 </div>
@@ -15,12 +14,18 @@
 ## 👋 Overview
 
 > 📌 **Introduction to the project**
-> - Hardware accelerated video codec library implementing encoding and decoding
-> - Built on Linux V4L2 API for optimal performance on Qualcomm platforms
-> - Supports multiple video codecs with unified C++ interface
-> - Designed for real-time video processing applications
+> - Hardware-accelerated video codec library implementing H.264/H.265 encoding and decoding
+> - Ships **two interchangeable backends** selected at build time — V4L2 (default) and VIDC
+> - Single unified C++ interface (`VideoCodec`) regardless of the active backend
+> - Asynchronous, buffer-based pipeline with zero-copy DMA-BUF support
+> - Designed for real-time video processing on Qualcomm SoCs
 
-> 📌 **Architecture diagrams**
+The library builds into a single shared object, `libqrb_video_codec.so`
+(CMake target `qrb_video_codec`), and is distributed as the Debian packages
+`libqrb-video-codec-1` (runtime) and `libqrb-video-codec-dev` (headers + CMake
+config). All public symbols live in the `qrb::video_v4l2` namespace.
+
+> 📌 **Architecture diagram**
 
 ```mermaid
 flowchart TD
@@ -28,336 +33,305 @@ flowchart TD
     subgraph APP ["🎯 Application Layer"]
         direction LR
         UserApp["👤 User Applications"]
-        ROS2Node["🤖 ROS2 Video Nodes"]
+        ROS2Node["🤖 qrb_ros_video Nodes"]
     end
-    
-    %% QRB Video V4L2 Library API Layer
-    subgraph API ["🔧 QRB Video V4L2 Library API"]
-        direction LR
-        VideoCodec["🎬 VideoCodec Interface<br/>Main API Entry Point"]
-        Encoder["📤 Encoder<br/>Hardware Accelerated<br/>Video Encoding"]
-        Decoder["📥 Decoder<br/>Hardware Accelerated<br/>Video Decoding"]
 
-    
-        %% Core Components Layer
+    %% Public API Layer
+    subgraph API ["🔧 Public API (qrb::video_v4l2)"]
+        direction LR
+        VideoCodec["🎬 VideoCodec<br/>Abstract Interface"]
+        Encoder["📤 Encoder::create()"]
+        Decoder["📥 Decoder::create()"]
+
         subgraph CORE ["⚙️ Core Components"]
             direction TB
-            subgraph BUFFER ["Buffer Management System"]
+            subgraph CHANNEL ["Async Pipeline"]
                 direction LR
-                Buffer["� Buffer<br/>Data Container"]
-                BufferPool["🏊 BufferPool<br/>Memory Pool"]
-                BufferChannel["🔄 BufferChannel<br/>Communication"]
+                Client["🧩 Client<br/>BufferChannel + Notifier"]
+                BufferChannel["🔄 BufferChannel<br/>Looper/Handler Queue"]
             end
-            
-            subgraph CONFIG ["Configuration & Control"]
+
+            subgraph BUFFER ["Buffer & Memory"]
                 direction LR
-                Settings["⚙️ Settings<br/>Codec Parameters"]
-                Profile["📋 Profile/Level<br/>Codec Standards"]
-                Format["🎨 Format Control<br/>Pixel Formats"]
+                Buffer["📦 Buffer<br/>Data Container"]
+                Memory["💾 Memory / Allocation<br/>DMA-BUF & MMAP"]
+                BufferPool["🏊 BufferPool"]
             end
-            
-            subgraph EVENTS ["Event Management"]
+
+            subgraph CONFIG ["Configuration"]
                 direction LR
-                Notifier["🔔 Event Notifier<br/>Callbacks & Events"]
-                Memory["💾 Memory Utils<br/>Low-level Memory"]
+                Setting["⚙️ Setting<br/>Profile/Level/Bitrate/…"]
+                Format["🎨 Format<br/>NV12/P010/H264/HEVC"]
             end
         end
     end
-    
-    %% V4L2 Interface Layer
-    subgraph V4L2 ["🐧 Linux V4L2 Interface"]
+
+    %% Backend Layer (build-time selectable)
+    subgraph BACKEND ["🔀 Codec Backend (build-time)"]
         direction LR
-        V4L2Codec["🎯 V4L2 Codec Driver<br/>Hardware Interface"]
-        V4L2Controls["🎛️ V4L2 Controls<br/>Device Configuration"]
+        V4L2["🐧 V4L2 Backend<br/>(default)<br/>V4l2Encoder / V4l2Decoder"]
+        VIDC["⚡ VIDC Backend<br/>(-DENABLE_VIDC_BACKEND=ON)<br/>VidcEncoder / VidcDecoder"]
     end
-    
+
     %% Hardware Layer
     subgraph HW ["🔧 Hardware Layer"]
         direction LR
-        VideoEncoder["📤 HW Video Encoder<br/>Dedicated Silicon"]
-        QualcommSoC["🔥 Qualcomm SoC<br/>Main Processor"]
-        VideoDecoder["📥 HW Video Decoder<br/>Dedicated Silicon"]
+        Driver["V4L2 driver (/dev/video*)<br/>or VIDC client lib"]
+        QualcommSoC["🔥 Qualcomm VPU"]
     end
-    
-    %% Main Data Flow
-    UserApp --> VideoCodec
-    ROS2Node --> VideoCodec
-    VideoCodec --> Encoder
-    VideoCodec --> Decoder
-    
-    %% API to Core connections
-    Encoder --> BUFFER
-    Decoder --> BUFFER
-    Encoder --> CONFIG
-    Decoder --> CONFIG
-    Encoder --> EVENTS
-    Decoder --> EVENTS
-    
-    %% Core to V4L2 connections
-    BUFFER --> V4L2Codec
-    CONFIG --> V4L2Controls
-    EVENTS --> V4L2Codec
-    
-    %% V4L2 to Hardware connections
-    V4L2Codec --> QualcommSoC
-    V4L2Controls --> QualcommSoC
-    QualcommSoC --> VideoEncoder
-    QualcommSoC --> VideoDecoder
-    
-    %% Buffer flow details
-    Buffer --> BufferPool
-    BufferPool --> BufferChannel
-    
-    %% Configuration flow
-    Settings --> Profile
-    Profile --> Format
-    
-    %% Styling
+
+    UserApp --> Encoder
+    UserApp --> Decoder
+    ROS2Node --> Encoder
+    ROS2Node --> Decoder
+    Encoder --> VideoCodec
+    Decoder --> VideoCodec
+    VideoCodec --> CORE
+    CORE --> V4L2
+    CORE --> VIDC
+    V4L2 --> Driver
+    VIDC --> Driver
+    Driver --> QualcommSoC
+
     classDef appLayer fill:#e3f2fd,stroke:#1976d2,stroke-width:3px,color:#000
     classDef apiLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px,color:#000
-    classDef coreLayer fill:#fff8e1,stroke:#f57c00,stroke-width:2px,color:#000
-    classDef v4l2Layer fill:#e8f5e8,stroke:#388e3c,stroke-width:3px,color:#000
+    classDef backendLayer fill:#e8f5e8,stroke:#388e3c,stroke-width:3px,color:#000
     classDef hwLayer fill:#fce4ec,stroke:#c2185b,stroke-width:3px,color:#000
-    classDef bufferGroup fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
-    classDef configGroup fill:#f1f8e9,stroke:#689f38,stroke-width:2px,color:#000
-    classDef eventGroup fill:#fdf7ff,stroke:#8e24aa,stroke-width:2px,color:#000
-    
-    %% Apply classes
+
     class UserApp,ROS2Node appLayer
-    class VideoCodec,Encoder,Decoder apiLayer
-    class Buffer,BufferPool,BufferChannel bufferGroup
-    class Settings,Profile,Format configGroup
-    class Notifier,Memory eventGroup
-    class V4L2Codec,V4L2Controls v4l2Layer
-    class VideoEncoder,QualcommSoC,VideoDecoder hwLayer
+    class VideoCodec,Encoder,Decoder,Client,BufferChannel,Buffer,Memory,BufferPool,Setting,Format apiLayer
+    class V4L2,VIDC backendLayer
+    class Driver,QualcommSoC hwLayer
 ```
 
-> 📌 **Describe the architecture diagram:**
-> - **🎯 Application Layer**: User applications and ROS2 video nodes that interact with the library through the main API
-> - **🔧 QRB Video V4L2 Library API**: Core interface layer featuring VideoCodec as the main entry point, with specialized Encoder and Decoder implementations
-> - **⚙️ Core Components**: Three main subsystems:
->   - **Buffer Management**: Handles video data containers, memory pooling, and inter-component communication
->   - **Configuration & Control**: Manages codec parameters, profiles/levels, and pixel format settings
->   - **Event Management**: Provides callback notifications and low-level memory utilities
-> - **🐧 Linux V4L2 Interface**: Low-level interface to Linux kernel V4L2 subsystem with codec drivers and device controls
-> - **🔧 Hardware Layer**: Qualcomm SoC with dedicated hardware video encoder and decoder units for optimal performance
+> 📌 **Architecture description:**
+> - **🎯 Application Layer**: User applications and the `qrb_ros_video` ROS 2 nodes call into the library through `Encoder`/`Decoder`.
+> - **🔧 Public API**: `VideoCodec` is the abstract interface; `Encoder::create()` / `Decoder::create()` return a `Client` that implements it. `BufferChannel` runs the asynchronous pipeline on a `Looper`/`Handler` thread.
+> - **⚙️ Core Components**: buffer/memory management (`Buffer`, `Memory`, `Allocation`, `BufferPool`) and configuration (`Setting`, `Format`).
+> - **🔀 Codec Backend**: exactly one backend is compiled in. **V4L2** (default) talks to the kernel V4L2 codec interface; **VIDC** (`-DENABLE_VIDC_BACKEND=ON`) links the Qualcomm VIDC client library. The public API is identical for both.
+> - **🔧 Hardware Layer**: the chosen backend drives the Qualcomm VPU.
+
+## 🔎 Table of Contents
+
+  * [Codec Backends](#-codec-backends)
+  * [APIs](#-apis)
+  * [Usage](#-usage)
+  * [Supported Targets](#-supported-targets)
+  * [Build from Source](#-build-from-source)
+  * [FAQs](#-faqs)
+
+## 🔀 Codec Backends
+
+The codec functionality is provided by one of two backends, chosen **at build
+time** through the `ENABLE_VIDC_BACKEND` CMake option. Both produce the same
+`libqrb_video_codec.so` and expose the identical public API — only the
+underlying driver path differs.
+
+| Backend | CMake Option | Default | Sources | Extra Dependencies |
+|---------|--------------|---------|---------|--------------------|
+| **V4L2** | `-DENABLE_VIDC_BACKEND=OFF` | ✅ Yes | `src/v4l2/` | none beyond the base toolchain |
+| **VIDC** | `-DENABLE_VIDC_BACKEND=ON` | No | `src/vidc/` | `libvidc_client` (`video-driver-dev`), `mm-osal-dev`, `common-headers-dev` |
+
+`Encoder::create()` and `Decoder::create()` dispatch to the compiled-in backend
+(`V4l2Encoder`/`V4l2Decoder` or `VidcEncoder`/`VidcDecoder`) behind the
+`ENABLE_VIDC_BACKEND` macro, so application code never references a backend
+directly.
+
+> **Note:** the Debian package shipped through the Qualcomm PPA is built with
+> the **VIDC backend enabled** (`debian/rules` sets `-DENABLE_VIDC_BACKEND=ON`).
 
 ## ⚓ APIs
 
-### 🔹 QRB Video V4L2 Library APIs
+All types are declared in the `qrb::video_v4l2` namespace and exported under
+`<install-prefix>/include/qrb_video/`.
 
-#### Core Classes
+### 🔹 Entry Points
 
-**VideoCodec**
-- Main interface for video codec operations
-- Provides unified API for both encoding and decoding
+| Class | Header | Factory | Returns |
+|-------|--------|---------|---------|
+| `Encoder` | `Encoder.hpp` | `Encoder::create(std::string mime)` | `std::shared_ptr<Client>` |
+| `Decoder` | `Decoder.hpp` | `Decoder::create(std::string mime)` | `std::shared_ptr<Client>` |
 
-**Encoder**
-- Video encoding functionality with hardware acceleration
-- Supports various encoding parameters and formats
+The `mime` argument selects the codec; two constants are provided in
+`VideoCodec.hpp`:
 
-**Decoder** 
-- Video decoding functionality with hardware acceleration
-- Handles multiple video formats and codecs
+| Constant | Value |
+|----------|-------|
+| `MIME_H264` | `"video/x-h264"` |
+| `MIME_H265` | `"video/x-h265"` |
 
-**Buffer Management**
-- `Buffer`: Represents video data buffers
-- `BufferPool`: Manages buffer allocation and recycling
-- `BufferChannel`: Handles buffer communication between components
-- `Memory`: Low-level memory management utilities
+### 🔹 `VideoCodec` Interface
 
-## 🎯 Supported Targets
+`VideoCodec` (in `VideoCodec.hpp`) is the abstract base implemented by the
+returned `Client`:
 
-- Qualcomm platforms with V4L2 hardware acceleration support
+| Method | Description |
+|--------|-------------|
+| `bool configure(const Setting & s)` | Apply a configuration setting (see below). |
+| `bool start()` | Start the codec session. |
+| `bool stop()` | Stop the codec session. |
+| `bool pause()` | Pause processing. |
+| `bool seek()` | Flush/seek the pipeline. |
+| `std::shared_ptr<Buffer> acquireBuffer()` | Acquire a free buffer from the pool. |
+| `bool queueBuffer(const std::shared_ptr<Buffer> & item)` | Queue an input buffer for processing. |
+| `bool dispatchBuffer(const std::shared_ptr<Buffer> & item)` | Return a consumed output buffer to the pipeline. |
+| `void setNotifier(const std::shared_ptr<Notifier> & notifier)` | Register a callback for output buffers. |
 
----
+Completed buffers are delivered asynchronously through
+`VideoCodec::Notifier::onBufferAvailable(const std::shared_ptr<Buffer> &)`,
+which the application implements.
 
-## ✨ Installation
+### 🔹 Buffer & Memory
 
-### Prerequisites
+| Type | Header | Role |
+|------|--------|------|
+| `Buffer` | `Buffer.hpp` | Frame/bitstream container; carries timestamp, sequence, `bytesused`, EOS flag, and a `Memory`. Create with `Buffer::create(allocation)`. |
+| `Memory` | `Memory.hpp` | Backing store (`Linear` or `Graphics`); `map()`/`unmap()`/`data()`/`fd()`. |
+| `Allocation` | `Memory.hpp` | Describes an import: `fd`, `size`, `offset`, `Usage` (`MMAP` or `DMABUF`), and a `MemoryView`. |
+| `MemoryView` | `Memory.hpp` | Pixel layout: `Format pixelfmt`, `width`, `height`, and per-plane `stride`/`scanline`/`size`. |
+| `BufferPool` | `BufferPool.hpp` | Allocates and recycles `Buffer` instances. |
 
-```bash
-# Install Qualcomm PPA
-sudo add-apt-repository ppa:ubuntu-qcom-iot/qcom-ppa
-sudo apt update
+### 🔹 Configuration (`Setting`)
 
-# Install required system dependencies
-sudo apt install build-essential cmake libglog-dev pkg-config
+A `Setting` is built with `Setting::create(<struct>)` and applied via
+`configure()`. The setting structs (in `VideoCodec.hpp`) and the `Format` enum
+(in `Memory.hpp`) are:
 
-# Ensure V4L2 development headers are available
-sudo apt install libv4l-dev
-```
+| Setting | Struct | Fields | Notes |
+|---------|--------|--------|-------|
+| `RESOLUTION` | `Resolution` | `uint32_t width, height` | Frame dimensions. |
+| `FORMAT` | `Format` (enum) | — | Pixel/codec format: `NV12`, `NV12C`, `P010`, `TP10C`, `H264`, `HEVC`. |
+| `FRAMERATE` | `Framerate` | `uint32_t value` | Frames per second. |
+| `BITRATE` | `Bitrate` | `int32_t value`, `Mode mode`, `bool enable` | `Mode` ∈ `{OFF, CBR, VBR}`. Encoder only. |
+| `PROFILE` | `Profile` | `uint32_t value` | `AVC_BASELINE/CONSTRAINED_BASELINE/MAIN/HIGH/CONSTRAINED_HIGH`, `HEVC_MAIN/MAIN10/MAIN_STILL`. |
+| `LEVEL` | `Level` | `uint32_t value` | `AVC_1_0 … AVC_6_2`, `HEVC_1_0 … HEVC_6_2`. |
+| `COUNT` | `BufferCount` | `size_t value` | Hint for the number of port buffers. |
 
-### Install from Package
-
-```bash
-# Install deb packages
-sudo apt install libqrb-video-codec-1
-sudo apt install libqrb-video-codec-dev
-```
+> The active driver ultimately determines which values and ranges are
+> supported.
 
 ## 🚀 Usage
 
-### API Usage (Conceptual)
-The primary interaction with the library involves:
-1.  Creating an `Encoder` or `Decoder` instance using `Encoder::create(mime_type)` or `Decoder::create(mime_type)`.
-2.  Configuring the instance using the `configure(Setting)` method. Settings are created using helper structs like `Profile`, `Level`, `Bitrate`, `Framerate`, `Resolution`, and `BufferCount`.
-3.  Setting a `Notifier` to receive callbacks for events like buffer availability.
-4.  Starting the codec using `start()`.
-5.  Queueing input buffers (`queueBuffer()`) and acquiring/dispatching output buffers (`acquireBuffer()`, `dispatchBuffer()`).
-6.  Stopping the codec using `stop()`.
+The library is consumed from CMake via the exported package:
 
-### Configuration Parameters
-Parameters are configured by creating a `Setting` object using the specific parameter structs defined in `VideoCodec.hpp`. The `configure(const Setting& s)` method of a `VideoCodec` instance is used to apply these settings.
-**Note:** The V4L2 driver ultimately determines the supported values and ranges for these parameters.
-#### 1. Codec MIME Type
-  - **Description**: Specifies the video codec to be used. Passed as a string during `Encoder::create(mime_type)` or `Decoder::create(mime_type)`.
-  - **Type**: `std::string`
-  - **Constants Defined in `VideoCodec.hpp`**:
-    - `qrb::video_v4l2::MIME_H264` (evaluates to "video/x-h264")
-    - `qrb::video_v4l2::MIME_H265` (evaluates to "video/x-h265")
-  - **Example**: `auto encoder_client = Encoder::create(MIME_H264);`
-#### 2. Resolution
-  - **Description**: Sets the width and height of the video frames. This setting likely also incorporates the Pixel Format for the port being configured.
-  - **Struct**: `qrb::video_v4l2::Resolution`
-    - `uint32_t width`
-    - `uint32_t height`
-  - **Setting Type Enum**: `qrb::video_v4l2::Setting::RESOLUTION`
-  - **Example**:
-    ```cpp
-    qrb::video_v4l2::Resolution res;
-    res.width = 1920;
-    res.height = 1080;
-    codec->configure(qrb::video_v4l2::Setting::create(res));
-    ```
-#### 3. Pixel Format (Handled via `Setting::FORMAT`)
-  - **Description**: Specifies the pixel format for input video data (to encoder) or output video data (from decoder). The actual `enum class Format` definition needs to be located in the library's headers to list specific values (e.g., NV12, I420 for raw formats; or codec-specific formats). This is applied using `Setting::create(Format& format)`.
-  - **Struct**: `qrb::video_v4l2::Format` (This is an enum, the actual struct passed to `Setting::create` would be an instance of this enum).
-  - **Setting Type Enum**: `qrb::video_v4l2::Setting::FORMAT`
-  - **Example**:
-    ```cpp
-    qrb::video_v4l2::Format fmt_setting = qrb::video_v4l2::Format::NV12;
-    codec->configure(qrb::video_v4l2::Setting::create(fmt_setting));
-    ```
-  - **Note**: `V4l2Codec.hpp` defines `static const std::unordered_map<Format, uint32_t> formatMapping;`. The keys of this map would be the members of `enum class Format`.
-#### 4. Framerate
-  - **Description**: Sets the target frames per second.
-  - **Struct**: `qrb::video_v4l2::Framerate`
-    - `uint32_t value` (FPS)
-  - **Setting Type Enum**: `qrb::video_v4l2::Setting::FRAMERATE`
-  - **Example**:
-    ```cpp
-    qrb::video_v4l2::Framerate fr;
-    fr.value = 30;
-    codec->configure(qrb::video_v4l2::Setting::create(fr));
-    ```
-#### 5. Bitrate (Primarily for Encoders)
-  - **Description**: Configures the target bitrate and mode.
-  - **Struct**: `qrb::video_v4l2::Bitrate`
-    - `int32_t value` (Target bitrate in bits per second)
-    - `Mode mode` (Enum: `qrb::video_v4l2::Bitrate::OFF`, `qrb::video_v4l2::Bitrate::CBR` - Constant Bitrate, `qrb::video_v4l2::Bitrate::VBR` - Variable Bitrate)
-    - `bool enable` (Set to `true` to apply bitrate control)
-  - **Setting Type Enum**: `qrb::video_v4l2::Setting::BITRATE`
-  - **Example**:
-    ```cpp
-    qrb::video_v4l2::Bitrate br;
-    br.value = 4000000; // 4 Mbps
-    br.mode = qrb::video_v4l2::Bitrate::Mode::CBR;
-    br.enable = true;
-    codec->configure(qrb::video_v4l2::Setting::create(br));
-    ```
-#### 6. Profile (Codec-Specific)
-  - **Description**: Sets the codec profile (e.g., H.264 Baseline, Main, High; HEVC Main, Main10).
-  - **Struct**: `qrb::video_v4l2::Profile`
-    - `uint32_t value` (Use enums from `qrb::video_v4l2::Profile::`)
-  - **Enums in `VideoCodec.hpp` (subset)**:
-    - `qrb::video_v4l2::Profile::AVC_BASELINE`
-    - `qrb::video_v4l2::Profile::AVC_CONSTRAINED_BASELINE`
-    - `qrb::video_v4l2::Profile::AVC_MAIN`
-    - `qrb::video_v4l2::Profile::AVC_HIGH`
-    - `qrb::video_v4l2::Profile::AVC_CONSTRAINED_HIGH`
-    - `qrb::video_v4l2::Profile::HEVC_MAIN`
-    - `qrb::video_v4l2::Profile::HEVC_MAIN10`
-    - `qrb::video_v4l2::Profile::HEVC_MAIN_STILL`
-  - **Setting Type Enum**: `qrb::video_v4l2::Setting::PROFILE`
-  - **Example**:
-    ```cpp
-    qrb::video_v4l2::Profile prof;
-    prof.value = qrb::video_v4l2::Profile::AVC_HIGH;
-    codec->configure(qrb::video_v4l2::Setting::create(prof));
-    ```
-#### 7. Level (Codec-Specific)
-  - **Description**: Sets the codec level, indicating capabilities and constraints.
-  - **Struct**: `qrb::video_v4l2::Level`
-    - `uint32_t value` (Use enums from `qrb::video_v4l2::Level::`)
-  - **Enums in `VideoCodec.hpp` (subset for H.264/AVC)**:
-    - `qrb::video_v4l2::Level::AVC_1_0`, `AVC_1_B`, ..., `AVC_5_1`, ..., `AVC_6_2`
-  - **Enums in `VideoCodec.hpp` (subset for H.265/HEVC)**:
-    - `qrb::video_v4l2::Level::HEVC_1_0`, ..., `HEVC_5_1`, ..., `HEVC_6_2`
-  - **Setting Type Enum**: `qrb::video_v4l2::Setting::LEVEL`
-  - **Example**:
-    ```cpp
-    qrb::video_v4l2::Level lvl;
-    lvl.value = qrb::video_v4l2::Level::AVC_4_1; // For H.264 Level 4.1
-    codec->configure(qrb::video_v4l2::Setting::create(lvl));
-    ```
-#### 8. Buffer Count
-  - **Description**: Hint for the number of buffers for input or output ports. The library has default counts (e.g., Decoder: 4 input, 12 output; Encoder: 12 input, 4 output, as seen in `V4l2BufferCount` defaults in `V4l2Codec.hpp`).
-  - **Struct**: `qrb::video_v4l2::BufferCount`
-    - `size_t value`
-  - **Setting Type Enum**: `qrb::video_v4l2::Setting::COUNT`
-  - **Example**:
-    ```cpp
-    qrb::video_v4l2::BufferCount bc;
-    bc.value = 8; // Request 8 buffers for the port being configured (clarify if input/output specific)
-    codec->configure(qrb::video_v4l2::Setting::create(bc));
+```cmake
+find_package(qrb_video_lib REQUIRED)
+target_link_libraries(my_app PRIVATE qrb_video_codec)
+```
 
-### Checking Results
+Typical encode/decode flow:
 
-- Monitor encoding/decoding performance through system logs
-- Verify hardware acceleration is active via V4L2 device status
+1. Create a codec: `auto codec = Encoder::create(MIME_H264);` (or `Decoder::create`).
+2. Register a notifier: `codec->setNotifier(my_notifier);`.
+3. Configure with `Setting::create(...)` + `codec->configure(...)`.
+4. `codec->start();`
+5. Submit work with `codec->queueBuffer(buffer)`; receive results in
+   `onBufferAvailable()` and return them with `dispatchBuffer()`.
+6. `codec->stop();` when done.
+
+Example (encoder setup):
+
+```cpp
+using namespace qrb::video_v4l2;
+
+auto encoder = Encoder::create(MIME_H264);
+encoder->setNotifier(my_notifier);   // implements VideoCodec::Notifier
+
+Resolution res{ .width = 1920, .height = 1080 };
+encoder->configure(Setting::create(res));
+
+Framerate fr{ .value = 30 };
+encoder->configure(Setting::create(fr));
+
+Bitrate br{ .value = 10'000'000, .mode = Bitrate::CBR, .enable = true };
+encoder->configure(Setting::create(br));
+
+Profile prof{ .value = Profile::AVC_HIGH };
+encoder->configure(Setting::create(prof));
+
+encoder->start();
+
+// Import a DMA-BUF frame and queue it:
+auto allocation = std::make_shared<Allocation>();
+allocation->fd = dmabuf_fd;
+allocation->size = frame_size;
+allocation->flags = Allocation::Usage::DMABUF;
+allocation->view.pixelfmt = Format::NV12;
+allocation->view.width = 1920;
+allocation->view.height = 1080;
+auto buffer = Buffer::create(allocation);
+buffer->bytesused = frame_size;
+encoder->queueBuffer(buffer);
+```
+
+## 🎯 Supported Targets
+
+- Qualcomm platforms with VPU hardware acceleration
+- **Ubuntu 24.04 LTS (Noble)**
+
+Backend-specific requirements:
+- **V4L2 backend**: a kernel exposing the V4L2 codec interface (`/dev/video*`).
+- **VIDC backend**: the Qualcomm VIDC client library and video driver
+  (`video-driver` runtime; `video-driver-dev`, `mm-osal-dev`,
+  `common-headers-dev` at build time).
 
 ---
 
-
 ## 👨‍💻 Build from Source
 
-### Step 1: Install Dependencies
+The Debian packages are built from the Ubuntu workspace using the
+`build-utils/ubuntu/build.py` helper, which builds each package inside a clean
+`sbuild` chroot (`noble-arm64-ubuntu` under `/srv/chroot`) and resolves all
+build dependencies automatically.
+
+### Prerequisites (one time per build server)
+
+Run `ci-setup.sh` **once** as root to install the build tooling (`sbuild`,
+`mmdebstrap`, `uidmap`, …) and configure the unprivileged-user-namespace
+environment that `--gen-debians` requires:
 
 ```bash
-# Install build tools and dependencies
-sudo apt update
-sudo apt install build-essential cmake libglog-dev pkg-config libv4l-dev
+sudo bash build-utils/ubuntu/ci-setup.sh
 ```
 
-### Step 2: Clone and Build
+This adds the build user to the `sbuild` group and sets up `subuid`/`subgid`
+mappings — log out and back in (or run `newgrp sbuild`) afterwards so the group
+change takes effect. The sbuild base tarball is created automatically by
+`build.py` on first use, so no manual chroot creation is needed.
+
+### Build
+
+From the **workspace root**, build the codec library and its dependencies with:
 
 ```bash
-# Navigate to your workspace
-cd /path/to/your/workspace
-
-# Build the library
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-
-# Install the library
-sudo make install
+python3 build-utils/ubuntu/build.py --gen-debians --package libqrb-video-codec-dev
 ```
+
+This builds the `qrb-video-lib` source package and drops the generated `.deb`s
+(`libqrb-video-codec-1`, `libqrb-video-codec-dev`) under `debian_packages/`.
+
+| Flag | Description |
+|------|-------------|
+| `--gen-debians` | Generate the Debian binary packages. |
+| `--package <name>` | Binary package to build (dependencies are built as needed). Use `libqrb-video-codec-dev` for the headers + library, or `ros-jazzy-qrb-ros-video-test` to build the whole `qrb_ros_video` stack. |
+
+> The `debian/rules` enables the VIDC backend by default
+> (`-DENABLE_VIDC_BACKEND=ON`). To build the V4L2-only backend instead, edit
+> `debian/rules` to set `-DENABLE_VIDC_BACKEND=OFF`. See
+> [Codec Backends](#-codec-backends) for the trade-offs.
 
 ## ❔ FAQs
 
 <details>
+<summary>What is the difference between the V4L2 and VIDC backends?</summary><br>
+Both implement the same <code>VideoCodec</code> API and produce the same shared
+library. The V4L2 backend (default) drives the kernel V4L2 codec interface; the
+VIDC backend links the Qualcomm VIDC client library directly. Pick one at build
+time with <code>-DENABLE_VIDC_BACKEND</code>. Application code does not change.
+</details>
+
+<details>
 <summary>What video codecs are supported?</summary><br>
-The library supports multiple video codecs through the V4L2 interface. Specific codec support depends on the underlying hardware platform capabilities. Common codecs include H.264, H.265, and others supported by Qualcomm hardware acceleration.
-</details>
-
-<details>
-<summary>How do I check if hardware acceleration is working?</summary><br>
-You can verify hardware acceleration by checking V4L2 device nodes (usually /dev/video*) and monitoring system performance. Hardware-accelerated encoding/decoding should show significantly better performance compared to software-only solutions.
-</details>
-
-<details>
-<summary>What are the memory requirements?</summary><br>
-Memory requirements depend on video resolution, frame rate, and codec settings. The library includes optimized buffer management to minimize memory usage while maintaining performance.
+H.264 (<code>MIME_H264</code>) and H.265/HEVC (<code>MIME_H265</code>), subject
+to the capabilities of the underlying Qualcomm hardware.
 </details>

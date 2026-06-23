@@ -5,7 +5,6 @@
   </p>
   <p>Hardware-accelerated video processing package for Qualcomm robotics platforms</p>
   
-  <a href="https://ubuntu.com/download/qualcomm-iot" target="_blank"><img src="https://img.shields.io/badge/Qualcomm%20Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Qualcomm Ubuntu"></a>
   <a href="https://docs.ros.org/en/jazzy/" target="_blank"><img src="https://img.shields.io/badge/ROS%20Jazzy-1c428a?style=for-the-badge&logo=ros&logoColor=white" alt="Jazzy"></a>
   
 </div>
@@ -16,6 +15,7 @@
 
 > 📌 **QRB ROS Video Package Features**
 > - Hardware-accelerated H.264/H.265 video encoding and decoding using Qualcomm VPU
+> - Two interchangeable codec backends selectable at build time — V4L2 (default) and VIDC
 > - Zero-copy memory management for high-performance video processing
 > - Seamless integration with ROS 2 ecosystem and camera pipelines
 > - Support for real-time video streaming and file I/O operations
@@ -61,8 +61,8 @@ flowchart LR
 ## 🔎 Table of Contents
 
   * [APIs](#-apis)
+  * [Codec Backends](#-codec-backends)
   * [Supported Targets](#-supported-targets)
-  * [Installation](#-installation)
   * [Usage](#-usage)
   * [Build from Source](#-build-from-source)
   * [Contributing](#-contributing)
@@ -112,6 +112,36 @@ flowchart LR
 | `format` | string | "h264" | Input codec format |
 | `pixel-format` | string | "nv12" | Output pixel format |
 
+## 🔌 Codec Backends
+
+The hardware codec functionality lives in the `qrb_video_lib` package, which ships
+two interchangeable backends behind a single shared library
+(`libqrb_video_codec.so`). The backend is chosen **at build time** via the
+`ENABLE_VIDC_BACKEND` CMake option — the ROS interfaces, topics, and parameters
+described above are identical regardless of which backend is compiled in.
+
+| Backend | CMake Option | Default | Description |
+|---------|--------------|---------|-------------|
+| **V4L2** | `-DENABLE_VIDC_BACKEND=OFF` | ✅ Yes | Uses the Linux kernel V4L2 codec interface (`/dev/video*`). No extra dependencies beyond the standard toolchain. |
+| **VIDC** | `-DENABLE_VIDC_BACKEND=ON` | No | Uses the Qualcomm VIDC client library for direct access to the Video Processing Unit. Requires `video-driver-dev` and `mm-osal-dev`. |
+
+When `ENABLE_VIDC_BACKEND=ON`, the build additionally links against
+`libvidc_client` and compiles the sources under `qrb_video_lib/src/vidc/`.
+The prebuilt Debian package distributed through the Qualcomm PPA is built with
+the **VIDC backend enabled**.
+
+To select a backend when building the library from source:
+
+```bash
+# V4L2 backend (default)
+cmake -B build -DENABLE_VIDC_BACKEND=OFF
+cmake --build build
+
+# VIDC backend
+cmake -B build -DENABLE_VIDC_BACKEND=ON
+cmake --build build
+```
+
 ## 🎯 Supported Targets
 
 - **Ubuntu 24.04 LTS (Noble)**
@@ -122,25 +152,6 @@ Hardware Requirements:
 - Camera module compatible with qrb_ros_camera package (optional)
 
 ---
-
-## ✨ Installation
-
-### Prerequisites
-
-```bash
-# Install Qualcomm PPA
-sudo add-apt-repository ppa:ubuntu-qcom-iot/qcom-ppa
-sudo add-apt-repository ppa:ubuntu-qcom-iot/qirp
-sudo apt update
-```
-
-### Install Packages
-
-```bash
-# Install QRB ROS Video packages
-sudo apt install ros-jazzy-qrb-ros-video ros-jazzy-qrb-ros-video-test
-```
-
 
 ## 🚀 Usage
 
@@ -167,40 +178,47 @@ sudo apt install ros-jazzy-qrb-ros-video ros-jazzy-qrb-ros-video-test
 
 ## 👨‍💻 Build from Source
 
-```bash
-# Install build tools and dependencies
-sudo add-apt-repository ppa:ubuntu-qcom-iot/qcom-ppa
-sudo add-apt-repository ppa:ubuntu-qcom-iot/qirp
-sudo apt update
-sudo apt install build-essential cmake pkg-config
+The Debian packages are built from the Ubuntu workspace using the
+`build-utils/ubuntu/build.py` helper, which builds each package inside a clean
+`sbuild` chroot (`noble-arm64-ubuntu` under `/srv/chroot`) and resolves all
+build dependencies automatically.
 
-# Install GStreamer development packages
-sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+### Prerequisites (one time per build server)
 
-# Install ROS2 Jazzy (if not already installed)
-# Follow instructions at https://docs.ros.org/en/jazzy/Installation.html
-sudo apt install ros-jazzy-rclcpp ros-jazzy-rclcpp-components ros-jazzy-ament-cmake-auto ros-jazzy-std-msgs ros-jazzy-sensor-msgs ros-jazzy-qrb-ros-transport-image-type
-```
-
-### Step 2: Clone and Build
+Run `ci-setup.sh` **once** as root to install the build tooling (`sbuild`,
+`mmdebstrap`, `uidmap`, …) and configure the unprivileged-user-namespace
+environment that `--gen-debians` requires:
 
 ```bash
-# Navigate to your ROS2 workspace
-cd ~/ros2_ws/src
-
-# Clone the repository (if not already cloned)
-git clone https://github.com/qualcomm-qrb-ros/qrb_ros_video qrb_ros_video
-
-# Set up ROS2 environment
-source /opt/ros/jazzy/setup.bash
-
-# Build the test nodes
-cd ~/ros2_ws
-colcon build --packages-up-to qrb_ros_video
-
-# Source the workspace
-source install/setup.bash
+sudo bash build-utils/ubuntu/ci-setup.sh
 ```
+
+This adds the build user to the `sbuild` group and sets up `subuid`/`subgid`
+mappings — log out and back in (or run `newgrp sbuild`) afterwards so the group
+change takes effect. The sbuild base tarball is created automatically by
+`build.py` on first use, so no manual chroot creation is needed.
+
+### Build
+
+From the **workspace root**, build the package and its dependencies with:
+
+```bash
+python3 build-utils/ubuntu/build.py --gen-debians --package ros-jazzy-qrb-ros-video-test
+```
+
+This builds the full dependency chain — `qrb_video_lib`
+(`libqrb-video-codec`), `qrb_ros_video`, and the `ros-jazzy-qrb-ros-video-test`
+utilities — and drops the generated `.deb`s under `debian_packages/`.
+
+| Flag | Description |
+|------|-------------|
+| `--gen-debians` | Generate the Debian binary packages. |
+| `--package <name>` | Source package to build (dependencies are built as needed). Use `ros-jazzy-qrb-ros-video` to build without the test utilities. |
+
+> The codec library's `debian/rules` enables the VIDC backend by default
+> (`-DENABLE_VIDC_BACKEND=ON`). To build the V4L2-only backend instead, edit
+> `qrb_video_lib/debian/rules` to set `-DENABLE_VIDC_BACKEND=OFF`. See
+> [Codec Backends](#-codec-backends) for the trade-offs.
 
 ## 🤝 Contributing
 
