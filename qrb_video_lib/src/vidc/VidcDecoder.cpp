@@ -59,6 +59,20 @@ bool VidcDecoder::start()
 
 bool VidcDecoder::stop()
 {
+  // Flush the frames the firmware is still holding for reorder (DPB) BEFORE
+  // tearing the session down. drain() is idempotent (guarded by drained_), so
+  // if an EOS input buffer already triggered a (publishing) drain via
+  // queueBuffer this is a no-op; otherwise (caller stops without ever sending
+  // EOS) it runs here. publishFrames=false: stop() is teardown, the node and
+  // its publisher are being destroyed, so we flush the driver's held buffers
+  // but do NOT dispatch them downstream (publishing into a dead publisher
+  // crashed with rclcpp "invalid publisher id").
+  //
+  // Without the drain, the VIDC_IOCTL_STOP issued by VidcCodec::stop() discards
+  // the held frames and the caller observes the last few output buffers coming
+  // back with bytesused == 0. Mirrors gst-plugin-vidc GstClient::stateIdle
+  // (DRAIN + wait for COMMAND_DRAIN before STOP) and VidcEncoder::stop().
+  drain(false);
   return VidcCodec::stop();
 }
 

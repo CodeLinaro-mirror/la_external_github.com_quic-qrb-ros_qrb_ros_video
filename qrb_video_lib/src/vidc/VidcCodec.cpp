@@ -67,6 +67,12 @@ bool VidcCodec::start()
 {
   LOGI("VidcCodec: start\n");
   state_ = LOADING;
+  // Restore the live-session invariants in case this codec object is being
+  // restarted (stop -> start): a prior teardown drain set drained_ = true and
+  // dispatchEnabled_ = false, which would otherwise leave the new session
+  // unable to drain and silently never dispatching any frame.
+  drained_.store(false);
+  dispatchEnabled_.store(true);
 
   if (!driver_->open()) {
     LOGE("VidcCodec: driver open failed\n");
@@ -166,6 +172,16 @@ bool VidcCodec::pause()
 
 bool VidcCodec::queueBuffer(const std::shared_ptr<Buffer> & item)
 {
+  // An end-of-stream marker carries no bitstream - it is the upstream's
+  // "no more input" signal (the node sets EOS on a zero-length compressed
+  // frame, see video_decoder.cpp). Don't submit it as an input buffer; turn
+  // it into a DRAIN so the firmware flushes the frames it is holding for
+  // reorder. Mirrors V4l2Codec::queueBuffer (isEOS -> drain()).
+  if (item->isEOS()) {
+    LOGI("VidcCodec::queueBuffer: EOS input, draining\n");
+    return drain();
+  }
+
   auto vidc_buf = std::dynamic_pointer_cast<VidcBuffer>(item);
   if (!vidc_buf) {
     vidc_buf = std::make_shared<VidcBuffer>(*item);
@@ -301,7 +317,7 @@ void VidcCodec::onOutputDone(const vidc_frame_data_type & frame)
   // (publishing it races node teardown -> rclcpp "invalid publisher id").
   // Mirrors gst-plugin-vidc EVENT_OUTPUTS_DONE, which only pushes downstream
   // when (fd > 0 && size > 0) and otherwise treats EOS purely as a signal.
-  if (buf->bytesused > 0) {
+  if (buf->bytesused > 0 && dispatchEnabled_.load()) {
     dispatchBuffer(buf);
   }
   // Re-queue the output buffer unless EOS or we are tearing the port down
@@ -537,5 +553,39 @@ bool VidcCodec::feedOutputBuffer(std::shared_ptr<VidcBuffer> buf)
 {
   auto fd = buf->toFrameData(VIDC_BUFFER_OUTPUT);
   return driver_->ioctl(VIDC_IOCTL_FILL_OUTPUT_BUFFER, &fd, sizeof(fd), nullptr, 0) == 0;
+}
+
+bool VidcCodec::drain(bool publishFrames)
+{
+  // Idempotent: an EOS input buffer (queueBuffer) and a subsequent stop() must
+  // not both drain the session. exchange() ensures only the first caller runs.
+  if (drained_.exchange(true)) {
+    return true;
+  }
+  // Only meaningful while the session is live. If a reconfigure is mid-flight
+  // let it finish first so its STOP_OUTPUT/START_OUTPUT does not race the drain.
+  if (state_ != STARTED) {
+    return true;
+  }
+  if (reconfigThread_.joinable()) {
+    reconfigThread_.join();
+  }
+  // When draining for teardown, suppress dispatch so the frames the firmware
+  // flushes are not published into a publisher that is being destroyed (that
+  // race produced rclcpp "invalid publisher id" and a crash). The buffers are
+  // still returned to us via onOutputDone, which is all we need for the driver
+  // to release them and STOP cleanly.
+  dispatchEnabled_.store(publishFrames);
+  LOGI("VidcCodec: drain (publish=%d)\n", publishFrames);
+  armEvent(VIDC_EVT_RESP_DRAIN);
+  if (driver_->ioctl(VIDC_IOCTL_DRAIN, nullptr, 0, nullptr, 0) != 0) {
+    LOGE("VidcCodec: DRAIN ioctl failed\n");
+    return false;
+  }
+  if (!waitForEvent()) {
+    LOGE("VidcCodec: DRAIN timed out waiting for VIDC_EVT_RESP_DRAIN\n");
+    return false;
+  }
+  return true;
 }
 }  // namespace qrb::video_v4l2
