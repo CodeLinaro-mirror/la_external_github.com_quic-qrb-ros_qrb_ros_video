@@ -194,13 +194,14 @@ bool VidcEncoder::start()
 
 bool VidcEncoder::stop()
 {
-  // Drain before stopping. DRAIN takes no payload and is acked by
-  // VIDC_EVT_RESP_DRAIN; it is a regular ioctl on this driver (see
+  // Drain before stopping so queued raw frames are fully encoded and emitted.
+  // drain() is idempotent (guarded by drained_), so if an EOS input buffer
+  // already triggered the drain via queueBuffer this is a no-op. publish=false:
+  // stop() is teardown, so flush the driver's held buffers without dispatching
+  // into a publisher that is being destroyed. DRAIN takes no payload and is
+  // acked by VIDC_EVT_RESP_DRAIN; it is a regular ioctl on this driver (see
   // gst-plugin-vidc GstClient::stateIdle), not a ping.
-  armEvent(VIDC_EVT_RESP_DRAIN);
-  driver_->ioctl(VIDC_IOCTL_DRAIN, nullptr, 0, nullptr, 0);
-  waitForEvent();
-
+  drain(false);
   return VidcCodec::stop();
 }
 }  // namespace qrb::video_v4l2

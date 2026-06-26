@@ -92,6 +92,21 @@ protected:
   void armEvent(vidc_event_type ev);
   bool waitForEvent();
   bool feedOutputBuffer(std::shared_ptr<VidcBuffer> buf);
+  // Issue VIDC_IOCTL_DRAIN and block until VIDC_EVT_RESP_DRAIN, so the firmware
+  // flushes every frame it is holding for reorder before the session is torn
+  // down. Idempotent: guarded by drained_ so an EOS input buffer and a later
+  // stop() do not drain twice. Runs while state_ is STARTED so onOutputDone
+  // keeps dispatching and re-feeding the drained frames; the trailing
+  // zero-length EOS marker is not re-fed, so feeding stops on its own.
+  //
+  // publishFrames controls what happens to the flushed frames:
+  //   true  - dispatch them downstream (clean end-of-stream via an EOS input
+  //           buffer: the consumer wants these last reordered frames).
+  //   false - flush them out of the driver but do NOT dispatch (teardown via
+  //           stop(): the node/publisher is being destroyed, so publishing a
+  //           drained frame would race teardown -> "invalid publisher id" and
+  //           a use-after-free on the dispatch path).
+  bool drain(bool publishFrames = true);
 
   std::shared_ptr<VidcDriver> driver_;
   std::shared_ptr<BufferPool> inputPool_;
@@ -106,6 +121,13 @@ protected:
   // from every legal vidc_event_type. Written by callers under armEvent(),
   // consumed (and reset to -1) by onEvent() on the driver poll thread.
   std::atomic<int> expectedEvent_{-1};
+  // Set once a drain has been issued (via an EOS input buffer or stop()), so
+  // drain() is idempotent and the two paths cannot drain the session twice.
+  std::atomic<bool> drained_{false};
+  // Gates dispatchBuffer() in onOutputDone (which runs on the driver poll
+  // thread). Cleared by a teardown drain so frames flushed while the node is
+  // being destroyed are not published into a dead publisher. Default true.
+  std::atomic<bool> dispatchEnabled_{true};
   std::map<size_t, std::shared_ptr<VidcBuffer>> inputBuffers_;
   std::map<size_t, std::shared_ptr<VidcBuffer>> outputBuffers_;
   // In-flight input buffers held by the driver. Holds a strong reference to
