@@ -130,6 +130,21 @@ protected:
       const uint8_t * data,
       size_t size) = 0;
 
+  // Publish a terminating end-of-stream message downstream when the source
+  // runs dry. Default is a no-op; a reader whose consumer needs an explicit EOS
+  // (e.g. the decoder, which turns an empty input frame into a publishing DRAIN
+  // that flushes its held reorder/DPB frames while the graph is still alive)
+  // overrides this. Guarded by eos_published_ so it fires at most once.
+  virtual void publish_eos() {}
+
+  void signal_eos()
+  {
+    if (eos_published_)
+      return;
+    eos_published_ = true;
+    publish_eos();
+  }
+
   void parse_duration()
   {
     // Parse the duration string to seconds
@@ -307,6 +322,7 @@ protected:
     if (duration_seconds_ > 0 && now_steady >= end_time_) {
       RCLCPP_INFO(
           this->get_logger(), "Duration reached. Sending EOS event and stopping the pipeline.");
+      signal_eos();
       if (timer_) {
         timer_->cancel();
       }
@@ -323,6 +339,7 @@ protected:
           // Play once mode: Natural EOS reached, stop the pipeline.
           RCLCPP_INFO(
               this->get_logger(), "End of stream reached (play once mode). Stopping the pipeline.");
+          signal_eos();
           if (timer_) {
             timer_->cancel();
           }
@@ -368,6 +385,7 @@ protected:
 
   std::mutex buffer_mutex_;
   std::atomic<uint32_t> available_sample = 0;
+  bool eos_published_ = false;
   GstClockTime buffer_timestamp_ = GST_CLOCK_TIME_NONE;
   std::thread main_thread_;
 };
@@ -394,6 +412,21 @@ protected:
     // Copy the data
     msg->data.resize(size);
     memcpy(msg->data.data(), data, size);
+  }
+
+  // Forward an empty CompressedImage as the end-of-stream marker. The decoder
+  // node treats a zero-length compressed frame as EOS (video_decoder.cpp:
+  // msg.data.size() == 0 -> setEOS()), which drives a publishing DRAIN so the
+  // firmware's held reorder/DPB frames are flushed downstream to the writer
+  // while the graph is still alive (the teardown drain cannot publish them).
+  void publish_eos() override
+  {
+    auto msg = std::make_unique<sensor_msgs::msg::CompressedImage>();
+    msg->header.stamp = this->now();
+    msg->format = format_;
+    // data left empty -> EOS
+    RCLCPP_INFO(this->get_logger(), "Publishing EOS (empty frame) downstream.");
+    publisher_->publish(std::move(msg));
   }
 };
 
