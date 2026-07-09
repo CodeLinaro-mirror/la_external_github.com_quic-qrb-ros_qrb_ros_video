@@ -41,6 +41,12 @@ public:
 
   bool sendMessageAsync(std::shared_ptr<Message> & msg);
 
+  // Drain and stop the underlying looper. Must be called from the owning
+  // (non-looper) thread during teardown so that the worker thread is joined
+  // deterministically before this handler's members are destroyed. After this
+  // returns no further messages will be dispatched.
+  void quitLooper();
+
 protected:
   bool finishMessage(const std::shared_ptr<Message> & msg, value_type ret);
 

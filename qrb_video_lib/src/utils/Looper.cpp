@@ -17,8 +17,25 @@ Looper::Looper()
 
 Looper::~Looper()
 {
+  quit();
+}
+
+void Looper::quit()
+{
   running = false;
-  looper.join();
+  cv.notify_all();
+
+  if (!looper.joinable())
+    return;
+
+  if (looper.get_id() == std::this_thread::get_id()) {
+    // Being torn down on our own thread: joining ourselves would throw
+    // EDEADLK. Detach so the loop can unwind; running == false guarantees it
+    // exits after the current message completes.
+    looper.detach();
+  } else {
+    looper.join();
+  }
 }
 
 bool Looper::sendMessage(const std::shared_ptr<Message> & msg)

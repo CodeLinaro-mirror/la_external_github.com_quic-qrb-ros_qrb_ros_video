@@ -54,6 +54,10 @@ bool BufferChannel::stop()
 {
   auto msg = this->obtainMessage(MSG_STOP);
   this->sendMessage(msg);
+  // Drain and join the looper on the caller's (node) thread. This guarantees
+  // no in-flight MSG_DISPATCH_BUFFER runs against the notifier after stop()
+  // returns, and that ~Looper never self-joins from the looper thread.
+  this->quitLooper();
   return true;
 }
 

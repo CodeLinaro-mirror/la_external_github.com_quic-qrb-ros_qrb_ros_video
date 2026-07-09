@@ -69,6 +69,13 @@ bool Handler::sendMessageAsync(std::shared_ptr<Message> & message)
   return ret;
 }
 
+void Handler::quitLooper()
+{
+  if (looper) {
+    looper->quit();
+  }
+}
+
 bool Handler::finishMessage(const std::shared_ptr<Message> & msg, value_type ret)
 {
   if (msg->flags & Handler::Flags::SYNC) {
