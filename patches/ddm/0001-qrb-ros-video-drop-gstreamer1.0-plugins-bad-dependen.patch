@@ -1,0 +1,22 @@
+From d1b45199f9ca327ed57e9c8c350c14fd56eb4120 Mon Sep 17 00:00:00 2001
+From: chalia <chalia@qti.qualcomm.com>
+Date: Thu, 30 Jul 2026 15:16:43 +0800
+Subject: [PATCH] qrb-ros-video: drop gstreamer1.0-plugins-bad dependency
+
+Change-Id: I3052c10244d82801bded85c96344292e438e2ef9
+---
+ qrb_ros_video/debian/control | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/qrb_ros_video/debian/control b/qrb_ros_video/debian/control
+index 2ba937a..c7c59b5 100644
+--- a/qrb_ros_video/debian/control
++++ b/qrb_ros_video/debian/control
+@@ -42,7 +42,6 @@ Depends: ${shlibs:Depends},
+          ros-jazzy-qrb-ros-video,
+          gstreamer1.0-plugins-base,
+          gstreamer1.0-plugins-good,
+-         gstreamer1.0-plugins-bad,
+ Description: QRB ROS Video Test Utilities
+  Test utilities and components for the QRB ROS Video package. Includes
+  test nodes for video source reading, sink writing, and validation of
